@@ -1,0 +1,57 @@
+version: '3'
+services:
+  db:
+    image: postgres:13.3
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_DB=${POSTGRES_DB}
+    ports:
+      - '5432:5432'
+#  bot:
+#    build: proxy/.
+#    environment:
+#      TELEGRAM_BOT_TOKEN: "${TELEGRAM_BOT_TOKEN}"
+#      TELEGRAM_BOT_NAME: "${TELEGRAM_BOT_NAME}"
+#      INSTAGRAM_LOGIN: "${INSTAGRAM_LOGIN}"
+#      INSTAGRAM_PASSWORD: "${INSTAGRAM_PASSWORD}"
+#      DATASOURCE_URL: ${DATASOURCE_URL}
+#      DATASOURCE_USER: ${POSTGRES_USER}
+#      DATASOURCE_PASSWORD: ${POSTGRES_PASSWORD}
+#    links:
+#      - "db:db"
+#    ports:
+#      - "8080:8080"
+#    depends_on:
+#      - db
+  # post:
+  #   build: InstagramPostSync/.
+  #   ports:
+  #     - "5003:5003"
+  #   environment:
+  #     - FLASK_APP=app.py
+  #     - FLASK_ENV=development
+  #     - MINIO_URL=minio:9000
+  #     - MINIO_ACCESS_KEY=minio_user
+  #     - MINIO_SECRET_KEY=minio_password
+  #     - BUCKET_NAME=instagram-content
+  #     - DOWNLOAD_DIR=/app/downloads
+  #     - PORT=5003
+  minio:
+    image: quay.io/minio/minio:RELEASE.2022-02-18T01-50-10Z
+    environment:
+      #      - MINIO_ROOT_USER=${MINIO_ACCESS_KEY}
+      #      - MINIO_ROOT_PASSWORD=${MINIO_SECRET_KEY}
+      - MINIO_ROOT_USER=minio_user
+      - MINIO_ROOT_PASSWORD=minio_password
+      - MINIO_ADDRESS=:9000
+      - MINIO_CONSOLE_ADDRESS=:9001
+    command: server /data
+    ports:
+      - '9000:9000' # MinIO API
+      - '9001:9001' # MinIO Console
+    volumes:
+      - minio_data:/data
+
+volumes:
+  minio_data: { }
