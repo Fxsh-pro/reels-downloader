@@ -1,21 +1,26 @@
 from flask import Flask, request, jsonify
 import instaloader
 import os
+import requests
 from minio import Minio
 from minio.error import S3Error
 
 app = Flask(__name__)
 loader = instaloader.Instaloader()
 
+# Configuration
 minio_url = os.getenv("MINIO_URL", "localhost:9000")
 minio_access_key = os.getenv("MINIO_ACCESS_KEY", "minio_user")
 minio_secret_key = os.getenv("MINIO_SECRET_KEY", "minio_password")
 bucket_name = os.getenv("BUCKET_NAME", "instagram-content")
 download_dir = os.getenv("DOWNLOAD_DIR", "downloads")
+
 print("START")
 print(minio_url)
+
 port = int(os.getenv("PORT", "5003"))
 
+# Initialize MinIO client
 minio_client = Minio(
     minio_url,
     access_key=minio_access_key,
@@ -23,6 +28,7 @@ minio_client = Minio(
     secure=False
 )
 print("CREATED")
+
 # Ensure the MinIO bucket exists
 if not minio_client.bucket_exists(bucket_name):
     minio_client.make_bucket(bucket_name)
@@ -40,31 +46,47 @@ def download_instagram_content():
             return jsonify({"error": "URL is required"}), 400
 
         url = data["url"]
+
+        # Resolve share URLs to the actual post URL
+        if "/share/" in url:
+            print("Resolving share URL...")
+            response = requests.get(url, allow_redirects=True)
+            url = response.url  # This is the real post URL
+            print(f"Resolved URL: {url}")
+
+        # Extract shortcode once here
         shortcode = url.split("/")[-2]
         target_path = os.path.join(download_dir, shortcode)
-
         os.makedirs(target_path, exist_ok=True)
 
-        download_media(url, target_path)
-
+        # Pass the shortcode to download_media
+        download_media(shortcode, target_path)
         upload_folder_to_minio(target_path, shortcode)
 
         return jsonify({
             "message": "All files downloaded and uploaded to MinIO successfully.",
             "shortcode": shortcode
         }), 200
-        # return jsonify({"message": "All files downloaded and uploaded to MinIO successfully."}), 200
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
 
-def download_media(url, target_path):
+def download_media(shortcode, target_path):
     try:
-        shortcode = url.split("/")[-2]
-        post = instaloader.Post.from_shortcode(loader.context, shortcode)
+        print(f"Processing shortcode: {shortcode}")
+
+        # Attempt to fetch post metadata
+        try:
+            post = instaloader.Post.from_shortcode(loader.context, shortcode)
+        except instaloader.exceptions.PostNotFoundException:
+            raise ValueError("The specified post was not found.")
+
+        # Download the post
         loader.dirname_pattern = target_path
         loader.download_post(post, target="")
+        print(f"Successfully downloaded media for shortcode: {shortcode}")
+
     except Exception as e:
         print(f"Error downloading media: {e}")
         raise
@@ -76,7 +98,6 @@ def upload_folder_to_minio(folder_path, shortcode):
             for file in files:
                 file_path = os.path.join(root, file)
                 object_name = f"{shortcode}/{os.path.relpath(file_path, folder_path)}"
-
                 with open(file_path, 'rb') as file_data:
                     minio_client.put_object(
                         bucket_name,
@@ -86,11 +107,11 @@ def upload_folder_to_minio(folder_path, shortcode):
                         content_type="application/octet-stream"
                     )
                 print(f"File '{file_path}' uploaded to MinIO as '{object_name}'.")
-
                 os.remove(file_path)
                 print(f"File '{file_path}' deleted after upload.")
         os.rmdir(folder_path)
         print(f"Folder '{folder_path}' deleted after upload.")
+
     except S3Error as e:
         print(f"Error uploading to MinIO: {e}")
         raise

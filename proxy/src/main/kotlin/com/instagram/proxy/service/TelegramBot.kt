@@ -69,45 +69,16 @@ class TelegramBot(
                 val time = measureTimeMillis {
                     downloadedFiles = telegramHandlerService.handleIncomingMessage(telegramMessage)
                 }
-                println("TIME1 $time")
                 if (downloadedFiles.isEmpty()) {
                     sendMessage(tgChatId.toString(), "No media files found for the provided URL.")
                 } else {
                     sendMediaToTelegram(tgChatId.toString(), downloadedFiles)
-                    // sendMessage(tgChatId.toString(), "All files have been sent successfully.")
                 }
             } catch (e: Exception) {
                 LOG.error("Error processing the Telegram message: ${e.message}", e)
                 sendMessage(tgChatId.toString(), "An error occurred while processing your request.")
             }
         }
-
-        // GlobalScope.launch(Dispatchers.IO) {
-        //     task()
-        // // }
-        // val message = update.message
-        // if (message != null && message.hasText()) {
-        //     val tgChatId = message.chatId.toString()
-        //     val nickname = message.text.trim()
-        //
-        //     LOG.info("Received nickname: $nickname from Telegram user.")
-        //     sendMessage(tgChatId, "Fetching stories for Instagram user: $nickname...")
-        //     // instagramService.fetchPhotos("dfs")
-        //     try {
-        //         val stories = instagramService.fetchUserStories(nickname)
-        //         if (stories.isEmpty()) {
-        //             sendMessage(tgChatId, "No stories available for the user: $nickname.")
-        //         } else {
-        //             stories.forEach { story ->
-        //                 println(story.absolutePath)
-        //                 sendMediaToTelegram(tgChatId, story)
-        //             }
-        //         }
-        //     } catch (e: Exception) {
-        //         LOG.error("Error while fetching stories: ${e.message}", e)
-        //         sendMessage(tgChatId, "An error occurred while fetching stories: ${e.message}")
-        //     }
-        // }
     }
 
     private fun sendMediaToTelegram(chatId: String, files: List<File>) {
@@ -119,7 +90,7 @@ class TelegramBot(
             watch.stop()
             LOG.info("Time taken to filter media: ${watch.lastTaskTimeMillis} ms")
 
-            val totalImageSendingWatch = StopWatch() // Track total time for sending all images
+            val totalImageSendingWatch = StopWatch()
             totalImageSendingWatch.start("Total Image Sending Time")
 
             if (photos.isNotEmpty()) {
@@ -127,7 +98,7 @@ class TelegramBot(
 
                 runBlocking {
                     val jobs = photos.mapIndexed { index, photo ->
-                        GlobalScope.launch(Dispatchers.IO) { // Launching in IO dispatcher
+                        GlobalScope.launch(Dispatchers.IO) {
                             val imageWatch = StopWatch()
                             imageWatch.start()
 
@@ -138,7 +109,6 @@ class TelegramBot(
                                     .photo(inputFile)
                                     .build()
 
-                                // Send the photo and capture the response to get the file_id
                                 val sentMessage = execute(photoMessage)
                                 val fileId = sentMessage.photo?.last()?.fileId
                                 if (fileId != null) {
@@ -155,47 +125,14 @@ class TelegramBot(
                         }
                     }
 
-                    jobs.forEach { it.join() } // Wait for all coroutines to complete
+                    jobs.forEach { it.join() }
                 }
-
-                totalImageSendingWatch.stop()
-                LOG.info("Total time taken to send all images: ${totalImageSendingWatch.totalTimeMillis} ms")
-
-
-                // Send photos as a group
-            // if (photos.isNotEmpty()) {
-            //     val photoFileIds = mutableListOf<String>()
-            //
-            //     totalImageSendingWatch.start("Total Image Sending Time")
-            //     watch.start("Send Individual Photos")
-            //     photos.forEachIndexed { index, photo ->
-            //         val imageWatch = StopWatch()
-            //         imageWatch.start()
-            //
-            //         val inputFile = InputFile(photo)
-            //         val photoMessage = SendPhoto.builder()
-            //             .chatId(6405427252)
-            //             .photo(inputFile)
-            //             .build()
-            //
-            //         // Send the photo and capture the response to get the file_id
-            //         val sentMessage = execute(photoMessage)
-            //         val fileId = sentMessage.photo?.last()?.fileId
-            //         if (fileId != null) {
-            //             photoFileIds.add(fileId)
-            //         }
-            //
-            //         imageWatch.stop()
-            //         LOG.info("Time taken to send image ${index + 1}/${photos.size} (${photo.name}): ${imageWatch.totalTimeMillis} ms")
-            //     }
-            //     watch.stop()
-            //     LOG.info("Time taken to send individual photos: ${watch.lastTaskTimeMillis} ms")
 
                 if (photoFileIds.isNotEmpty()) {
                     watch.start("Send Media Group")
                     val mediaGroup = photoFileIds.map { fileId ->
                         InputMediaPhoto.builder()
-                            .media(fileId) // Use file_id instead of InputFile
+                            .media(fileId)
                             .build()
                     }
 
@@ -231,7 +168,6 @@ class TelegramBot(
             watch.start("Delete Sent Files")
             files.forEach { file ->
                 if (file.exists() && file.delete()) {
-                    // LOG.info("File deleted: ${file.absolutePath}")
                 } else {
                     LOG.warn("Failed to delete file: ${file.absolutePath}")
                 }
@@ -240,74 +176,8 @@ class TelegramBot(
             LOG.info("Time taken to delete sent files: ${watch.lastTaskTimeMillis} ms")
         }
 
-        LOG.info(watch.prettyPrint()) // Logs a breakdown of all execution times
+        LOG.info(watch.prettyPrint())
     }
-
-
-    // private fun sendMediaToTelegram(chatId: String, files: List<File>) {
-    //     val watch = StopWatch()
-    //     try {
-    //         // Separate photos and videos
-    //         val photos = files.filter { it.extension == "jpg" }
-    //         val videos = files.filter { it.extension == "mp4" }
-    //
-    //         // Send photos as a group
-    //         if (photos.isNotEmpty()) {
-    //             val photoFileIds = mutableListOf<String>()
-    //             photos.forEach { photo ->
-    //                 val inputFile = InputFile(photo)
-    //                 val photoMessage = SendPhoto.builder()
-    //                     .chatId(6405427252)
-    //                     .photo(inputFile)
-    //                     .build()
-    //
-    //                 // Send the photo and capture the response to get the file_id
-    //                 val sentMessage = execute(photoMessage)
-    //                 val fileId = sentMessage.photo?.last()?.fileId
-    //                 if (fileId != null) {
-    //                     photoFileIds.add(fileId)
-    //                 }
-    //             }
-    //
-    //             if (photoFileIds.isNotEmpty()) {
-    //                 val mediaGroup = photoFileIds.map { fileId ->
-    //                     InputMediaPhoto.builder()
-    //                         .media(fileId) // Use file_id instead of InputFile
-    //                         .build()
-    //                 }
-    //
-    //                 val sendMediaGroupRequest = SendMediaGroup.builder()
-    //                     .chatId(chatId)
-    //                     .medias(mediaGroup)
-    //                     .build()
-    //
-    //                 execute(sendMediaGroupRequest)
-    //                 LOG.info("Sent ${photos.size} photos as a media group.")
-    //             }
-    //         }
-    //
-    //         videos.forEach { video ->
-    //             val videoMessage = SendVideo.builder()
-    //                 .chatId(chatId)
-    //                 .video(InputFile(video))
-    //                 .caption(video.name)
-    //                 .build()
-    //             execute(videoMessage)
-    //             LOG.info("Sent video: ${video.name}")
-    //         }
-    //     } catch (e: TelegramApiException) {
-    //         LOG.error("Error sending media to Telegram: ${e.message}", e)
-    //     } finally {
-    //         // Delete all files after sending
-    //         files.forEach { file ->
-    //             if (file.exists() && file.delete()) {
-    //                 LOG.info("File deleted: ${file.absolutePath}")
-    //             } else {
-    //                 LOG.warn("Failed to delete file: ${file.absolutePath}")
-    //             }
-    //         }
-    //     }
-    // }
 
 
     private fun sendMessage(chatId: String, message: String) {
